@@ -1,0 +1,3 @@
+,Accuracy,Precision,Recall,F1
+Baseline DNN,0.9746,0.9738,0.9783,0.9759
+AB-DNN,0.9761,0.9745,0.9799,0.9771

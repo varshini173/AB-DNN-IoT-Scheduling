@@ -1,0 +1,5 @@
+,AB-DNN vs FIFO (%),AB-DNN vs Baseline DNN (%)
+HIGH mean latency (ms),-90.7,7.2
+HIGH p95 latency (ms),-91.9,0.0
+HIGH deadline-miss rate,-99.4,54.1
+Semantic goodput (Mbps),33.1,0.3

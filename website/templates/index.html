@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AB-DNN · Importance-Aware IoT Scheduling</title>
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<style>
+  :root{
+    --navy:#0B1F4D; --navy-2:#13306E; --navy-3:#1B3C82; --sky:#1BA0E2; --sky-dk:#1188C4; --sky-lt:#E6F4FC;
+    --ink:#14213D; --muted:#5B6B82; --line:#DCE5F0; --page:#F3F7FB; --white:#fff; --orange:#F5A623;
+    --low:#2FA36B; --med:#F5A623; --high:#E2483D;
+    --fifo:#9AA5B1; --dnn:#3B5BA5; --ab:#1BA0E2; --oracle:#2FA36B;
+    --sans:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55}
+  a{color:var(--sky-dk)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* ---------- top bar ---------- */
+  .topbar{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .topbar .wrap{display:flex;align-items:center;gap:22px;height:72px}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--navy);flex-shrink:0}
+  .brand svg{width:44px;height:30px}
+  .brand b{display:block;font-size:20px;line-height:1.1;letter-spacing:.2px}
+  .brand small{display:block;font-size:11px;color:var(--sky-dk);font-weight:600}
+  .menu{display:flex;gap:4px;margin-left:auto;overflow-x:auto}
+  .menu a{color:var(--navy);text-decoration:none;font-weight:600;font-size:14px;padding:8px 12px;border-right:1px solid var(--line);white-space:nowrap}
+  .menu a:last-child{border-right:0}
+  .menu a:hover{color:var(--sky-dk)}
+  .btn{display:inline-block;background:var(--sky);color:#fff;border:0;border-radius:6px;padding:12px 20px;font-weight:700;font-size:15px;
+       cursor:pointer;text-decoration:none;font-family:var(--sans);white-space:nowrap}
+  .btn:hover{background:var(--sky-dk)}
+  .btn.navy{background:var(--navy)} .btn.navy:hover{background:var(--navy-3)}
+  .btn.ghost{background:#fff;color:var(--sky-dk);border:2px solid var(--sky)}
+  .btn.small{padding:8px 14px;font-size:14px}
+  .btn[disabled]{opacity:.6;cursor:wait}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;overflow:hidden;color:#fff;
+        background:linear-gradient(135deg,var(--navy) 0%,var(--navy) 55%,var(--navy-2) 55%,var(--navy-2) 100%);
+        padding:54px 0 120px}
+  .hero:after{content:"";position:absolute;right:-120px;top:-60px;width:520px;height:520px;border-radius:50%;
+              background:radial-gradient(circle,rgba(27,160,226,.18),rgba(27,160,226,0) 70%)}
+  .hero .wrap{position:relative;z-index:1}
+  .eyebrow{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#9CC9EE}
+  .hero h1{font-size:clamp(30px,4.2vw,46px);line-height:1.12;margin:10px 0 10px;font-weight:700;max-width:900px}
+  .tagline{color:#C9DBF2;margin:0 0 30px;font-size:17px}
+  .tagline span{color:var(--sky);margin:0 6px}
+  .hero-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:28px;align-items:center}
+  .panel-media{background:#0E2A62;border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 40px rgba(0,0,0,.25)}
+  .panel-media svg{width:100%;height:auto;display:block}
+  .panel-q{background:rgba(6,20,52,.75);border-radius:10px;padding:26px 26px;border:1px solid rgba(255,255,255,.08)}
+  .panel-q h3{margin:0 0 12px;font-size:21px;line-height:1.3}
+  .panel-q p{margin:0 0 10px;color:#C9DBF2}
+  .team{margin-top:16px;font-size:13px;color:#9CC9EE}
+
+  /* ---------- banner card (overlaps hero) ---------- */
+  .banner{position:relative;z-index:2;margin-top:-82px;background:var(--sky);color:#fff;border-radius:10px;
+          display:grid;grid-template-columns:auto 1fr auto;gap:26px;align-items:center;padding:26px 30px;box-shadow:0 18px 40px rgba(11,31,77,.25)}
+  .banner .icon{width:88px;height:88px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 6px rgba(255,255,255,.25)}
+  .banner .icon svg{width:46px;height:46px}
+  .banner h2{margin:0 0 6px;font-size:22px}
+  .banner p{margin:0;color:#EAF6FD;font-size:15px}
+  .banner .kpis{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:10px;font-weight:700}
+  .banner .kpis span{white-space:nowrap}
+
+  /* ---------- sections ---------- */
+  section{padding:56px 0 6px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .sec-num{font-weight:800;color:var(--sky);font-size:15px;letter-spacing:.08em}
+  h2.sec{font-size:30px;margin:0;color:var(--navy)}
+  .lead{color:var(--muted);max-width:820px;margin:6px 0 22px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:0 4px 14px rgba(11,31,77,.05)}
+  .grid{display:grid;gap:18px}
+  .grid > *{min-width:0}
+  .g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media (max-width:960px){.hero-grid{grid-template-columns:1fr}.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}
+    .banner{grid-template-columns:1fr;text-align:left}.menu{display:none}}
+  @media (max-width:600px){.topbar .btn{padding:9px 12px;font-size:13px}.brand small{display:none}.brand b{font-size:17px}.topbar .wrap{gap:10px}}
+  @media (max-width:520px){.g4{grid-template-columns:1fr}}
+
+  /* workflow */
+  .flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+  .step{flex:1 1 140px;background:var(--navy);color:#fff;border-radius:10px;padding:14px 12px;text-align:center;font-weight:700;font-size:14px}
+  .step small{display:block;font-weight:500;color:#9CC9EE;margin-top:3px}
+  .step.hl{background:var(--sky)}
+  .arrow{align-self:center;color:var(--sky);font-weight:800;font-size:20px}
+
+  /* KPI */
+  .kpi .val{font-weight:800;font-size:38px;color:var(--navy);line-height:1.1}
+  .kpi .val.sky{color:var(--sky-dk)}
+  .kpi .lbl{font-size:14px;color:var(--muted);margin-top:6px}
+  .kpi .sub{font-size:13px;margin-top:10px;color:var(--ink);font-weight:600}
+  .kpi{border-top:4px solid var(--sky)}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th{white-space:normal}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;background:#F7FAFD}
+  tr.hl td{background:var(--sky-lt);font-weight:700}
+  .tablewrap{overflow-x:auto}
+  .note{font-size:13px;color:var(--muted)}
+
+  /* legend of schedulers */
+  .who{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .who div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted)}
+  .who b{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:14px;margin-bottom:2px}
+  .who i{display:inline-block;width:12px;height:12px;border-radius:3px}
+  @media (max-width:960px){.who{grid-template-columns:repeat(2,1fr)}}
+
+  /* controls */
+  .controls{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end;margin-bottom:12px}
+  .ctl label{display:block;font-size:14px;font-weight:700;margin-bottom:6px;color:var(--navy)}
+  .ctl output{font-size:22px;color:var(--sky-dk);margin-left:6px;font-weight:800}
+  .ctl .hint{font-size:12px;color:var(--muted);margin-top:3px}
+  input[type=range]{width:250px;accent-color:var(--sky)}
+  .presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 14px}
+  .presets span{font-size:13px;color:var(--muted);margin-right:4px;font-weight:600}
+  .chip{background:var(--sky-lt);color:var(--navy);border:1px solid #BFE3F6;border-radius:99px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:var(--sans)}
+  .chip:hover{background:#D3ECFA}
+  .status{font-size:14px;color:var(--muted);min-height:22px}
+  .warn{display:none;background:#FFF5E5;border:1px solid #F5C77A;color:#7A4B00;border-radius:8px;padding:10px 14px;font-size:14px;margin:6px 0 10px}
+  .chartbox{position:relative;height:230px}
+  .chartcard h4{margin:0 0 2px;font-size:15px;color:var(--navy)}
+  .chartcard p{margin:0 0 8px;font-size:12px;color:var(--muted)}
+
+  /* pills */
+  .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:700;color:#fff}
+  .LOW{background:var(--low)} .MEDIUM{background:var(--med)} .HIGH{background:var(--high)}
+  .ok{color:var(--low);font-weight:800} .bad{color:var(--high);font-weight:800}
+
+  .gallery img{width:100%;border-radius:8px;border:1px solid var(--line);background:#fff}
+  .gallery figcaption{font-size:13px;color:var(--muted);margin-top:6px}
+
+  footer{background:var(--navy);color:#9CC9EE;margin-top:56px;padding:30px 0;font-size:13px}
+  footer b{color:#fff}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ================= TOP BAR ================= -->
+<div class="topbar"><div class="wrap">
+  <a class="brand" href="#top" aria-label="AB-DNN IoT home">
+    <svg viewBox="0 0 44 30" aria-hidden="true">
+      <path d="M2 15 C10 2, 18 2, 22 15 S34 28, 42 15" fill="none" stroke="#0B1F4D" stroke-width="4" stroke-linecap="round"/>
+      <path d="M2 15 C10 28, 18 28, 22 15 S34 2, 42 15" fill="none" stroke="#1BA0E2" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+    <span><b>AB-DNN IoT</b><small>Smarter priority for 6G-oriented IoT</small></span>
+  </a>
+  <nav class="menu">
+    <a href="#overview">Overview</a><a href="#results">Results</a><a href="#simulate">Live Test</a>
+    <a href="#classify">Classify</a><a href="#charts">Charts</a><a href="#notes">Method</a>
+  </nav>
+  <a class="btn" href="#simulate">Run Live Test</a>
+</div></div>
+
+<!-- ================= HERO ================= -->
+<header class="hero" id="top"><div class="wrap">
+  <div class="eyebrow">Machine Learning (25SC2107E) · Department of ECE, KL University · A.Y. 2026-27</div>
+  <h1>Attention-Based DNN for Semantic-Importance-Aware Scheduling in 6G-Oriented IoT Networks</h1>
+  <p class="tagline">Real IoT Data <span>–</span> Attention-Based Deep Learning <span>–</span> Wireless Network Evaluation</p>
+
+  <div class="hero-grid">
+    <div class="panel-media" aria-label="System illustration">
+      <svg viewBox="0 0 572 250" role="img" aria-label="IoT devices send traffic to a base station where the AB-DNN labels importance and the scheduler sends urgent traffic first">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1BA0E2"/></marker>
+        </defs>
+        <!-- devices -->
+        <g font-family="Segoe UI, Arial" font-size="12" fill="#C9DBF2">
+          <rect x="16" y="22" width="112" height="40" rx="8" fill="#13306E" stroke="#2C4C8C"/>
+          <circle cx="36" cy="42" r="8" fill="#2FA36B"/><text x="50" y="46">Thermostat</text>
+          <rect x="16" y="76" width="112" height="40" rx="8" fill="#13306E" stroke="#2C4C8C"/>
+          <circle cx="36" cy="96" r="8" fill="#2FA36B"/><text x="50" y="100">Smart fridge</text>
+          <rect x="16" y="130" width="112" height="40" rx="8" fill="#13306E" stroke="#2C4C8C"/>
+          <circle cx="36" cy="150" r="8" fill="#F5A623"/><text x="50" y="154">Port scan</text>
+          <rect x="16" y="184" width="112" height="40" rx="8" fill="#13306E" stroke="#2C4C8C"/>
+          <circle cx="36" cy="204" r="8" fill="#E2483D"/><text x="50" y="208">DDoS attack</text>
+        </g>
+        <g stroke="#1BA0E2" stroke-width="2" fill="none" marker-end="url(#ar)" opacity=".9">
+          <path d="M130 42 C170 42, 170 118, 206 118"/><path d="M130 96 C165 96, 170 122, 206 122"/>
+          <path d="M130 150 C165 150, 170 128, 206 128"/><path d="M130 204 C170 204, 170 132, 206 132"/>
+        </g>
+        <!-- model -->
+        <rect x="210" y="78" width="140" height="94" rx="12" fill="#1BA0E2"/>
+        <text x="280" y="112" text-anchor="middle" font-family="Segoe UI, Arial" font-size="17" font-weight="700" fill="#fff">AB-DNN</text>
+        <text x="280" y="132" text-anchor="middle" font-family="Segoe UI, Arial" font-size="12" fill="#EAF6FD">feature attention</text>
+        <text x="280" y="150" text-anchor="middle" font-family="Segoe UI, Arial" font-size="12" fill="#EAF6FD">LOW · MED · HIGH</text>
+        <path d="M352 125 L392 125" stroke="#1BA0E2" stroke-width="2" marker-end="url(#ar)"/>
+        <!-- queue -->
+        <g font-family="Segoe UI, Arial" font-size="11" font-weight="700" fill="#fff">
+          <rect x="398" y="70" width="60" height="26" rx="6" fill="#E2483D"/><text x="428" y="87" text-anchor="middle">HIGH</text>
+          <rect x="398" y="112" width="60" height="26" rx="6" fill="#F5A623"/><text x="428" y="129" text-anchor="middle">MED</text>
+          <rect x="398" y="154" width="60" height="26" rx="6" fill="#2FA36B"/><text x="428" y="171" text-anchor="middle">LOW</text>
+        </g>
+        <text x="428" y="58" text-anchor="middle" font-family="Segoe UI, Arial" font-size="11" fill="#9CC9EE">scheduler</text>
+        <text x="428" y="200" text-anchor="middle" font-family="Segoe UI, Arial" font-size="11" fill="#9CC9EE">urgent first</text>
+        <path d="M460 83 L496 120" stroke="#1BA0E2" stroke-width="2" marker-end="url(#ar)"/>
+        <!-- tower -->
+        <g stroke="#C9DBF2" stroke-width="2.5" fill="none" stroke-linecap="round">
+          <path d="M520 205 L530 125 L540 205"/><path d="M524 175 L536 175"/><path d="M527 150 L533 150"/>
+          <path d="M514 118 a20 20 0 0 1 32 0"/><path d="M506 108 a32 32 0 0 1 48 0"/>
+        </g>
+        <circle cx="530" cy="125" r="4" fill="#1BA0E2"/>
+        <text x="530" y="226" text-anchor="middle" font-family="Segoe UI, Arial" font-size="11" fill="#9CC9EE">base station</text>
+      </svg>
+    </div>
+    <div class="panel-q">
+      <h3>In a busy IoT network, should a DDoS attack alert wait behind a smart fridge's temperature update?</h3>
+      <p>Most networks serve traffic first-come-first-served. Our attention-based DNN reads each IoT traffic record,
+         decides how important it is, and lets the wireless scheduler send urgent traffic first.</p>
+      <p>Trained on 211,043 real TON_IoT records and evaluated with wireless metrics: latency, deadline misses,
+         goodput, spectral efficiency, BER and PER.</p>
+      <div class="team">Samanvitha Ramsetty (2520040024) · Hema Varshini (2520040068) · Ratna Manvitha (2520040007) · Shraddha (2520040105)<br>
+        Guide: Dr. Vinnakota Venu Balaji, Assistant Professor, Dept. of ECE</div>
+    </div>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+<!-- ================= BANNER ================= -->
+<div class="banner">
+  <div class="icon" aria-hidden="true">
+    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#FFF3DD"/>
+      <path d="M14 30 l7-8 6 5 9-12" fill="none" stroke="#F5A623" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M31 15 h6 v6" fill="none" stroke="#F5A623" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div>
+    <h2>Headline result: urgent IoT traffic arrives about 10× faster</h2>
+    <p>At 90% network load and 20 dB signal, averaged over 5 simulation runs on 9,000 unseen test records.</p>
+    <div class="kpis" id="bannerKpis"><span>Loading results…</span></div>
+  </div>
+  <a class="btn navy" href="#simulate">Try it live</a>
+</div>
+
+<!-- ================= OVERVIEW ================= -->
+<section id="overview">
+  <div class="sec-head"><span class="sec-num">01</span><h2 class="sec">How it works</h2></div>
+  <p class="lead">Like triage in a hospital: check how serious each case is, then treat the serious ones first.</p>
+  <div class="card flow">
+    <div class="step">TON_IoT record<small>real IoT traffic</small></div><span class="arrow">›</span>
+    <div class="step">Pre-processing<small>log · one-hot · scaling</small></div><span class="arrow">›</span>
+    <div class="step hl">AB-DNN<small style="color:#EAF6FD">feature attention</small></div><span class="arrow">›</span>
+    <div class="step">Priority scheduler<small>HIGH → MED → LOW</small></div><span class="arrow">›</span>
+    <div class="step">Rayleigh uplink<small>20 MHz · QPSK · HARQ</small></div><span class="arrow">›</span>
+    <div class="step hl">Network KPIs<small style="color:#EAF6FD">latency · goodput · PER</small></div>
+  </div>
+</section>
+
+<!-- ================= RESULTS ================= -->
+<section id="results">
+  <div class="sec-head"><span class="sec-num">02</span><h2 class="sec">Key results</h2></div>
+  <p class="lead">Load 0.9 of channel capacity, average SNR 20 dB, mean of 5 simulation runs on the 9,000-record test set.
+     The headline numbers compare AB-DNN scheduling with FIFO (no AI).</p>
+  <div class="grid g4" id="kpis"></div>
+  <div class="grid" style="margin-top:18px">
+    <div class="card"><h3 style="margin:0 0 10px;color:var(--navy);font-size:18px">Network KPIs (system view)</h3><div class="tablewrap" id="netTable"></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card"><h3 style="margin:0 0 10px;color:var(--navy);font-size:18px">Classification metrics (algorithm view)</h3><div class="tablewrap" id="clsTable"></div></div>
+    <div class="card"><h3 style="margin:0 0 10px;color:var(--navy);font-size:18px">What this means</h3>
+      <p class="note" id="accNote" style="font-size:14px;color:var(--ink)"></p>
+      <p class="note" style="font-size:14px;color:var(--ink);margin-bottom:0">Throughput and spectral efficiency are almost identical for all schedulers:
+         the channel carries the same bits, AB-DNN only changes <b>which</b> bits go first. The gain in latency and on-time data costs no extra spectrum.</p></div>
+  </div>
+</section>
+
+<!-- ================= LIVE SIMULATION ================= -->
+<section id="simulate">
+  <div class="sec-head"><span class="sec-num">03</span><h2 class="sec">Live network test</h2></div>
+  <p class="lead">Choose how busy the network is and how good the signal is, then press <b>Run simulation</b>.
+     It uses the trained models' predictions on the 9,000 test records and simulates 3 seconds of traffic (3,000 slots of 1 ms).</p>
+
+  <div class="who">
+    <div><b><i style="background:var(--fifo)"></i>FIFO</b>Existing method: first come, first served, no AI</div>
+    <div><b><i style="background:var(--dnn)"></i>DNN</b>Our baseline: same network without attention</div>
+    <div><b><i style="background:var(--ab)"></i>AB-DNN</b>Our proposed model: with attention</div>
+    <div><b><i style="background:var(--oracle)"></i>Oracle</b>True labels: the best result possible</div>
+  </div>
+
+  <div class="card">
+    <div class="presets"><span>Quick demo:</span>
+      <button class="chip" data-load="0.6" data-snr="20">Quiet network (60%)</button>
+      <button class="chip" data-load="0.9" data-snr="20">Busy network (90%)</button>
+      <button class="chip" data-load="1.05" data-snr="20">Overloaded (105%)</button>
+      <button class="chip" data-load="0.9" data-snr="5">Very bad signal (5 dB)</button>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label for="load">Offered load (fraction of capacity)<output id="loadOut">0.90</output></label>
+        <input type="range" id="load" min="0.5" max="1.05" step="0.05" value="0.9">
+        <div class="hint">0.5 = quiet · 1.0 = full · above 1.0 = overloaded</div></div>
+      <div class="ctl"><label for="snr">Average SNR (dB)<output id="snrOut">20</output></label>
+        <input type="range" id="snr" min="5" max="30" step="1" value="20">
+        <div class="hint">signal quality: lower = more noise and re-sends</div></div>
+      <div><button class="btn" id="runSim">Run simulation</button></div>
+    </div>
+    <div class="warn" id="warn"></div>
+    <div class="status" id="simStatus"></div>
+    <div class="grid g4" style="margin-top:8px">
+      <div class="chartcard"><h4>HIGH mean latency (ms)</h4><p>average delay of urgent packets · lower is better</p><div class="chartbox"><canvas id="c1"></canvas></div></div>
+      <div class="chartcard"><h4>HIGH 95th-pct latency (ms)</h4><p>95% of urgent packets arrive within this · lower is better</p><div class="chartbox"><canvas id="c2"></canvas></div></div>
+      <div class="chartcard"><h4>HIGH deadline-miss rate (%)</h4><p>urgent packets later than 10 ms · lower is better</p><div class="chartbox"><canvas id="c3"></canvas></div></div>
+      <div class="chartcard"><h4>Semantic goodput (Mbps)</h4><p>data delivered correctly and on time · higher is better</p><div class="chartbox"><canvas id="c4"></canvas></div></div>
+    </div>
+    <div class="tablewrap" style="margin-top:18px" id="simTable"></div>
+  </div>
+</section>
+
+<!-- ================= CLASSIFY ================= -->
+<section id="classify">
+  <div class="sec-head"><span class="sec-num">04</span><h2 class="sec">Classify IoT records with the trained model</h2></div>
+  <p class="lead">Press <b>Classify</b> to label 250 real TON_IoT records (25 of each traffic type), or choose your own TON_IoT .csv / .xlsx file.
+     Each record gets an importance level, a latency budget, and the three features the attention layer weighted most.</p>
+  <div class="card">
+    <div class="controls">
+      <div class="ctl"><label for="file">Records file (optional)</label><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
+      <div><button class="btn" id="runCls">Classify</button></div>
+      <div><a class="btn ghost" href="/download/sample">Download sample CSV</a></div>
+    </div>
+    <div class="status" id="clsStatus"></div>
+    <div class="grid g4" id="clsSummary" style="margin:6px 0 16px"></div>
+    <div class="tablewrap" id="clsRows"></div>
+  </div>
+</section>
+
+<!-- ================= CHARTS ================= -->
+<section id="charts">
+  <div class="sec-head"><span class="sec-num">05</span><h2 class="sec">Charts from the notebook</h2></div>
+  <p class="lead">Generated by the Colab notebook on the full experiment. Click a chart to open it full size.</p>
+  <div class="grid g2 gallery">
+    {% for c in charts %}
+    <figure class="card" style="margin:0"><a href="{{ url_for('static', filename='charts/' + c) }}" target="_blank">
+      <img src="{{ url_for('static', filename='charts/' + c) }}" alt="{{ c }}" loading="lazy"></a>
+      <figcaption>{{ c.replace('_',' ').replace('.png','').capitalize() }}</figcaption></figure>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ================= METHOD ================= -->
+<section id="notes">
+  <div class="sec-head"><span class="sec-num">06</span><h2 class="sec">Method &amp; dataset</h2></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--navy);font-size:18px">Dataset and labels</h3>
+      <p>TON_IoT network dataset (UNSW Canberra), <code>train_test_network.csv</code>, 211,043 records.
+         60,000 stratified de-duplicated records were used (42,000 / 9,000 / 9,000). Importance comes from the dataset's own <code>type</code> label:</p>
+      <p><span class="pill LOW">LOW</span> normal &nbsp;
+         <span class="pill MEDIUM">MEDIUM</span> scanning, password, xss, mitm &nbsp;
+         <span class="pill HIGH">HIGH</span> dos, ddos, injection, backdoor, ransomware</p>
+      <p class="note">Moustafa N., Sustainable Cities and Society (2021) 102994; Alsaedi A. et al., IEEE Access 8 (2020) 165130–165150.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--navy);font-size:18px">Models and wireless model</h3>
+      <p><b>Baseline DNN:</b> Dense 128 → Dropout 0.3 → Dense 64 → Softmax.<br>
+         <b>AB-DNN:</b> attention block α = softmax(W₂ tanh(W₁x)) re-weights the 106 input features, then the same DNN.</p>
+      <p><b>Uplink:</b> 20 MHz, 1 ms slots, QPSK (40,000 bits/slot), Rayleigh fading, BER = ½·erfc(√γ),
+         PER = 1 − (1 − BER)<sup>L</sup>, up to 4 HARQ attempts. Latency budgets: HIGH 10 ms, MEDIUM 50 ms, LOW 200 ms.</p>
+      <p class="note">The IoT records are real; the channel and queue are simulated with standard textbook models.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap"><b>AB-DNN IoT</b> · Attention-Based DNN for Semantic-Importance-Aware Scheduling in 6G-Oriented IoT Networks ·
+  runs locally with Flask and TensorFlow · trained models in <code>models/</code></div></footer>
+
+<script>
+const SCHEDS = ["FIFO (no ML)","Baseline DNN","AB-DNN","Oracle"];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COLORS = [css("--fifo"),css("--dnn"),css("--ab"),css("--oracle")];
+const fmt = (v,d=2) => v===null||v===undefined||isNaN(v) ? "–" : Number(v).toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function tableHTML(cols, rows, highlight, digits=4){
+  let h = "<table><thead><tr><th></th>"+cols.map(c=>`<th>${esc(c)}</th>`).join("")+"</tr></thead><tbody>";
+  rows.forEach(r=>{ h += `<tr class="${r[0]===highlight?'hl':''}"><td>${esc(r[0])}</td>`+
+      r.slice(1).map(v=>`<td>${fmt(v,digits)}</td>`).join("")+"</tr>"; });
+  return h+"</tbody></table>";
+}
+
+fetch("/api/summary").then(r=>r.json()).then(d=>{
+  const imp = {}; d.improvement.rows.forEach(r=>imp[r[0]]={fifo:r[1], dnn:r[2]});
+  const net = {}; d.network.rows.forEach(r=>{ net[r[0]] = {}; d.network.columns.forEach((c,i)=>net[r[0]][c]=r[i+1]); });
+  const ab = net["AB-DNN"], fi = net["FIFO (no ML)"];
+  const cards = [
+    [fmt(-imp["HIGH mean latency (ms)"].fifo,1)+"%", "lower HIGH-priority mean latency",
+     `${fmt(fi["HIGH mean latency (ms)"])} ms → ${fmt(ab["HIGH mean latency (ms)"])} ms`],
+    [fmt(-imp["HIGH p95 latency (ms)"].fifo,1)+"%", "lower 95th-percentile latency",
+     `${fmt(fi["HIGH p95 latency (ms)"],1)} ms → ${fmt(ab["HIGH p95 latency (ms)"],1)} ms`],
+    [fmt(-imp["HIGH deadline-miss rate"].fifo,1)+"%", "fewer HIGH deadline misses",
+     `${fmt(fi["HIGH deadline-miss rate"]*100,1)}% → ${fmt(ab["HIGH deadline-miss rate"]*100,2)}%`],
+    ["+"+fmt(imp["Semantic goodput (Mbps)"].fifo,1)+"%", "more semantic goodput",
+     `${fmt(fi["Semantic goodput (Mbps)"])} → ${fmt(ab["Semantic goodput (Mbps)"])} Mbps`],
+  ];
+  document.getElementById("kpis").innerHTML = cards.map((c,i)=>
+    `<div class="card kpi"><div class="val ${i%2?'sky':''}">${c[0]}</div><div class="lbl">${c[1]}</div><div class="sub">${c[2]}</div></div>`).join("");
+  document.getElementById("bannerKpis").innerHTML =
+    `<span>Urgent delay ${fmt(fi["HIGH mean latency (ms)"])} → ${fmt(ab["HIGH mean latency (ms)"])} ms</span>
+     <span>Late urgent packets ${fmt(fi["HIGH deadline-miss rate"]*100,1)}% → ${fmt(ab["HIGH deadline-miss rate"]*100,2)}%</span>
+     <span>On-time data +${fmt(imp["Semantic goodput (Mbps)"].fifo,1)}%</span>`;
+  document.getElementById("netTable").innerHTML = tableHTML(d.network.columns, d.network.rows, "AB-DNN", 3);
+  document.getElementById("clsTable").innerHTML = tableHTML(d.classification.columns, d.classification.rows, "AB-DNN", 4);
+  const a = d.test_accuracy_loaded_models;
+  document.getElementById("accNote").innerHTML =
+    `Re-checked live with the saved models on ${d.n_test.toLocaleString()} test records: <b>AB-DNN ${(a["AB-DNN"]*100).toFixed(2)}%</b>, Baseline DNN ${(a["Baseline DNN"]*100).toFixed(2)}% accuracy.
+     The two models are statistically tied (3-seed check in the notebook). AB-DNN's added value is that its attention weights explain each decision; the network gain comes from importance-aware scheduling.`;
+});
+
+// ---------- live simulation ----------
+const charts = {};
+function bar(id, values){
+  if (charts[id]) { charts[id].data.datasets[0].data = values; charts[id].update(); return; }
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"bar",
+    data:{labels:["FIFO","DNN","AB-DNN","Oracle"], datasets:[{data:values, backgroundColor:COLORS, borderRadius:5}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>fmt(c.parsed.y,2)}}}, scales:{y:{beginAtZero:true, grace:"10%", grid:{color:"#E8EEF5"}}, x:{grid:{display:false}}}}
+  });
+}
+const load = document.getElementById("load"), snr = document.getElementById("snr");
+function syncOut(){
+  document.getElementById("loadOut").textContent = Number(load.value).toFixed(2);
+  document.getElementById("snrOut").textContent = snr.value;
+}
+load.oninput = syncOut; snr.oninput = syncOut;
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+  load.value = c.dataset.load; snr.value = c.dataset.snr; syncOut(); runSim();
+});
+
+function explain(load, snr, f, a){
+  const w = document.getElementById("warn");
+  if (snr < 12) {
+    w.style.display = "block";
+    w.innerHTML = `<b>Very weak signal (${snr} dB):</b> about ${Math.round(f.per*100)}% of transmissions fail, so the channel itself is broken.
+      Priority decides <i>who goes first</i>, but it cannot fix a failing channel, so every scheduler suffers. Try 20 dB to see the scheduling gain.`;
+  } else if (load <= 0.8) {
+    w.style.display = "block";
+    w.innerHTML = `<b>Quiet network (load ${load.toFixed(2)}):</b> there is almost no queue, so every packet is sent immediately and all schedulers look the same.
+      Increase the load to 0.9 or above to see AB-DNN's advantage.`;
+  } else { w.style.display = "none"; }
+}
+
+async function runSim(){
+  const b = document.getElementById("runSim"), st = document.getElementById("simStatus");
+  b.disabled = true; b.innerHTML = '<span class="spinner"></span>Simulating…'; st.textContent = "";
+  try{
+    const r = await fetch("/api/simulate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({load:+load.value, snr:+snr.value})});
+    const d = await r.json(); const R = d.results;
+    bar("c1", SCHEDS.map(s=>R[s].high_mean_latency_ms));
+    bar("c2", SCHEDS.map(s=>R[s].high_p95_latency_ms));
+    bar("c3", SCHEDS.map(s=>R[s].high_deadline_miss*100));
+    bar("c4", SCHEDS.map(s=>R[s].semantic_goodput_mbps));
+    const cols = ["HIGH mean lat (ms)","HIGH p95 (ms)","HIGH miss (%)","All miss (%)","Throughput (Mbps)","Goodput (Mbps)","Semantic goodput (Mbps)","Spectral eff (b/s/Hz)","PER (%)"];
+    const rows = SCHEDS.map(s=>{const x=R[s]; return [s,x.high_mean_latency_ms,x.high_p95_latency_ms,x.high_deadline_miss*100,
+      x.all_deadline_miss*100,x.throughput_mbps,x.goodput_mbps,x.semantic_goodput_mbps,x.spectral_eff,x.per*100];});
+    document.getElementById("simTable").innerHTML = tableHTML(cols, rows, "AB-DNN", 2);
+    const f=R["FIFO (no ML)"], a=R["AB-DNN"];
+    explain(d.load, d.snr, f, a);
+    const red = f.high_mean_latency_ms ? (1 - a.high_mean_latency_ms/f.high_mean_latency_ms)*100 : 0;
+    const times = a.high_mean_latency_ms ? f.high_mean_latency_ms/a.high_mean_latency_ms : 1;
+    st.innerHTML = `Load ${d.load.toFixed(2)}, SNR ${d.snr} dB · AB-DNN cuts urgent latency by <b>${red.toFixed(1)}%</b> vs FIFO`
+      + (times >= 1.5 ? ` (<b>${times.toFixed(1)}× faster</b>)` : "")
+      + ` · late urgent packets: FIFO ${(f.high_deadline_miss*100).toFixed(1)}% vs AB-DNN ${(a.high_deadline_miss*100).toFixed(1)}%`
+      + ` · single run in ${d.seconds}s (Key results average 5 runs)`;
+  }catch(e){ st.textContent = "Simulation failed: "+e; }
+  b.disabled = false; b.textContent = "Run simulation";
+}
+document.getElementById("runSim").onclick = runSim;
+runSim();
+
+// ---------- classify ----------
+document.getElementById("runCls").onclick = async ()=>{
+  const b = document.getElementById("runCls"), st = document.getElementById("clsStatus");
+  b.disabled = true; b.innerHTML = '<span class="spinner"></span>Classifying…'; st.textContent = "";
+  const fd = new FormData(); const f = document.getElementById("file").files[0]; if (f) fd.append("file", f);
+  try{
+    const r = await fetch("/api/classify",{method:"POST", body:fd}); const d = await r.json();
+    if (d.error) throw d.error;
+    st.innerHTML = `Source: ${esc(d.source)} · ${d.n} records classified` + (d.n>500 ? " (first 500 shown)" : "");
+    let cards = ["LOW","MEDIUM","HIGH"].map(c=>
+      `<div class="card kpi"><div class="val">${d.counts[c]}</div><div class="lbl"><span class="pill ${c}">${c}</span> predicted by AB-DNN</div></div>`);
+    if (d.accuracy) cards.push(`<div class="card kpi"><div class="val sky">${(d.accuracy["AB-DNN"]*100).toFixed(1)}%</div>
+      <div class="lbl">AB-DNN accuracy on these records</div><div class="sub">Baseline DNN: ${(d.accuracy["Baseline DNN"]*100).toFixed(1)}%</div></div>`);
+    document.getElementById("clsSummary").innerHTML = cards.join("");
+    let h = "<table><thead><tr><th>#</th><th>TON_IoT type</th><th>True importance</th><th>Baseline DNN</th><th>AB-DNN</th><th>Confidence</th><th>Latency budget</th><th style='text-align:left'>Top attended features</th></tr></thead><tbody>";
+    d.rows.forEach((r,i)=>{
+      const okc = r.true ? (r.ab===r.true ? "ok":"bad") : "";
+      h += `<tr><td>${i+1}</td><td>${esc(r.type)}</td><td>${r.true?`<span class="pill ${r.true}">${r.true}</span>`:"–"}</td>
+        <td><span class="pill ${r.dnn}">${r.dnn}</span></td><td><span class="pill ${r.ab}">${r.ab}</span> <span class="${okc}">${r.true?(r.ab===r.true?"✓":"✗"):""}</span></td>
+        <td>${(r.conf*100).toFixed(1)}%</td><td>${r.budget} ms</td><td style="text-align:left">${r.top.map(esc).join(", ")}</td></tr>`;
+    });
+    document.getElementById("clsRows").innerHTML = h + "</tbody></table>";
+  }catch(e){ st.textContent = "Could not classify this file: "+e; }
+  b.disabled = false; b.textContent = "Classify";
+};
+</script>
+</body>
+</html>

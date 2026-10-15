@@ -1,0 +1,5 @@
+,HIGH mean latency (ms),HIGH p95 latency (ms),HIGH deadline-miss rate,All deadline-miss rate,Throughput (Mbps),Goodput (Mbps),Semantic goodput (Mbps),Spectral efficiency (b/s/Hz),PER (measured)
+FIFO (no ML),13.0658,24.8,0.56,0.2716,38.16,35.8294,27.026,1.7915,0.0518
+Baseline DNN,1.1365,2.0,0.0022,0.0037,38.218,35.8803,35.8614,1.794,0.0515
+AB-DNN,1.2187,2.0,0.0034,0.0041,38.3761,35.9956,35.9689,1.7998,0.0522
+Oracle,1.0546,2.0,0.0,0.0009,38.3321,35.985,35.985,1.7992,0.0518
